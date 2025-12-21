@@ -1,0 +1,258 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  format-rust:
+    name: Check Rust formatting
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Check Rust formatting
+        run: cargo fmt --all -- --check
+        working-directory: src-tauri
+
+  format-frontend:
+    name: Check Frontend formatting
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check TypeScript
+        run: npx tsc --noEmit
+
+  check-rust:
+    name: Cargo check
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run cargo check
+        run: cargo check --all-targets --all-features
+        working-directory: src-tauri
+
+  clippy:
+    name: Cargo clippy
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Run clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+        working-directory: src-tauri
+
+  test-rust:
+    name: Run Rust tests
+    runs-on: windows-latest
+    needs: [format-rust, check-rust, clippy]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run tests
+        run: cargo test --verbose
+        working-directory: src-tauri
+
+  build-frontend:
+    name: Build Frontend
+    runs-on: windows-latest
+    needs: [format-frontend]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+  build-tauri-release:
+    name: Build Tauri Release
+    runs-on: windows-latest
+    needs: [test-rust, build-frontend]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Tauri app (Release)
+        run: npm run tauri build
+
+      - name: Create release archive
+        run: |
+          mkdir release
+          copy src-tauri\target\release\spath-gui.exe release\
+          copy README.md release\
+          copy LICENSE release\
+          Compress-Archive -Path release\* -DestinationPath spath-gui-windows-x64.zip
+
+      - name: Upload MSI installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: spath-gui-msi
+          path: src-tauri/target/release/bundle/msi/*.msi
+
+      - name: Upload NSIS installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: spath-gui-nsis
+          path: src-tauri/target/release/bundle/nsis/*.exe
+
+      - name: Upload standalone EXE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: spath-gui-exe
+          path: src-tauri/target/release/spath-gui.exe
+
+      - name: Upload ZIP artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: spath-gui-zip
+          path: spath-gui-windows-x64.zip
+
+  create-release:
+    name: Create GitHub Release
+    runs-on: windows-latest
+    needs: [build-tauri-release]
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download MSI artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: spath-gui-msi
+          path: msi/
+
+      - name: Download NSIS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: spath-gui-nsis
+          path: nsis/
+
+      - name: Download EXE artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: spath-gui-exe
+
+      - name: Download ZIP artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: spath-gui-zip
+
+      - name: Get installer filenames
+        id: get-files
+        run: |
+          $msiFile = Get-ChildItem -Path msi -Filter *.msi | Select-Object -First 1
+          $nsisFile = Get-ChildItem -Path nsis -Filter *.exe | Select-Object -First 1
+          echo "msi-path=$($msiFile.FullName)" >> $env:GITHUB_OUTPUT
+          echo "msi-name=$($msiFile.Name)" >> $env:GITHUB_OUTPUT
+          echo "nsis-path=$($nsisFile.FullName)" >> $env:GITHUB_OUTPUT
+          echo "nsis-name=$($nsisFile.Name)" >> $env:GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            ${{ steps.get-files.outputs.msi-path }}
+            ${{ steps.get-files.outputs.nsis-path }}
+            spath-gui.exe
+            spath-gui-windows-x64.zip
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            ## spath GUI - Windows PATH Security Tool
+            
+            ### Installation Options
+            
+            1. **MSI Installer** (Recommended)
+               - Download `${{ steps.get-files.outputs.msi-name }}`
+               - Double-click to install
+               - Automatically adds to Start Menu
+            
+            2. **NSIS Installer**
+               - Download `${{ steps.get-files.outputs.nsis-name }}`
+               - Alternative installer option
+            
+            3. **Standalone EXE**
+               - Download `spath-gui.exe`
+               - Run directly, no installation needed
+            
+            4. **ZIP Archive**
+               - Download `spath-gui-windows-x64.zip`
+               - Extract and run
+            
+            ### Features
+            - Scan PATH for security issues
+            - Verify exploitability of unquoted paths
+            - Clean duplicates
+            - Visualize PATH structure
+            - Backup and restore PATH
+            - Audit log tracking
+            - Smart automatic mode with suggestions
+            
+            ### Requirements
+            - Windows 10 or later
+            - No administrator rights required for USER PATH operations
+            
+            ### What's New
+            See the full changelog in the release notes below.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

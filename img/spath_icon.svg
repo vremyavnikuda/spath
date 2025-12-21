@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="pathGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1d4ed8;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="200" height="200" rx="45" fill="#18181b"/>
+  
+  <!-- Main path line with nodes -->
+  <g transform="translate(50, 80)">
+    <!-- Horizontal line -->
+    <line x1="0" y1="0" x2="100" y2="0" stroke="url(#pathGrad)" stroke-width="8" stroke-linecap="round"/>
+    
+    <!-- Path nodes -->
+    <circle cx="0" cy="0" r="8" fill="#3b82f6"/>
+    <circle cx="33" cy="0" r="8" fill="#3b82f6"/>
+    <circle cx="66" cy="0" r="8" fill="#3b82f6"/>
+    <circle cx="100" cy="0" r="8" fill="#3b82f6"/>
+    
+    <!-- Security checkmark on last node -->
+    <circle cx="100" cy="0" r="14" fill="#22c55e"/>
+    <path d="M 94 0 L 98 4 L 106 -5" 
+          stroke="#fff" 
+          stroke-width="3" 
+          fill="none" 
+          stroke-linecap="round" 
+          stroke-linejoin="round"/>
+  </g>
+  
+  <!-- Text "spath" -->
+  <text x="100" y="140" 
+        font-family="'Cascadia Code', 'Cascadia Mono', 'Consolas', monospace" 
+        font-size="36" 
+        font-weight="600" 
+        fill="#ffffff" 
+        text-anchor="middle"
+        letter-spacing="2">spath</text>
+</svg>
