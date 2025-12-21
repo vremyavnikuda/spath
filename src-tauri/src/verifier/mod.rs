@@ -13,7 +13,6 @@ pub struct VerifyResult {
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub enum ThreatLevel {
-    Safe,
     Potential,
     RealThreat,
 }
